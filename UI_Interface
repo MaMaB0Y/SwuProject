@@ -16,13 +16,11 @@ class DaiBuddyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Kanit',
       ),
-      
       home: const RegisterScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
-
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -111,11 +109,20 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  
+  
+  final List<double> _sugarRecords = [0, 0, 0, 0, 0, 0, 0];
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      HomeScreen(userName: widget.userName),
+      HomeScreen(
+        userName: widget.userName, 
+        sugarRecords: _sugarRecords,
+        onRecordsUpdated: () {
+          setState(() {});
+        },
+      ),
       ProfileScreen(userName: widget.userName),
     ];
 
@@ -139,22 +146,33 @@ class _MainScreenState extends State<MainScreen> {
 
 class HomeScreen extends StatefulWidget {
   final String userName;
-  const HomeScreen({super.key, required this.userName});
+  final List<double> sugarRecords;
+  final VoidCallback onRecordsUpdated;
+
+  const HomeScreen({
+    super.key, 
+    required this.userName, 
+    required this.sugarRecords,
+    required this.onRecordsUpdated,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  double currentSugar = 110.0; 
+  final _sugarInputController = TextEditingController();
+  String _selectedDay = 'จ.';
 
-  
-  void _checkSugarLevel(double value) {
+  final List<String> _daysOfWeek = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.'];
+
+  void _updateSugarLevel(int dayIndex, double value) {
     setState(() {
-      currentSugar = value;
+      widget.sugarRecords[dayIndex] = value;
     });
-    if (currentSugar >= 250) {
-      
+    widget.onRecordsUpdated();
+    
+    if (value >= 250) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const EmergencyAlertScreen()),
@@ -164,6 +182,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    int currentDayIndex = _daysOfWeek.indexOf(_selectedDay);
+    double currentSugar = widget.sugarRecords[currentDayIndex];
+
     Color statusColor = Colors.green;
     String statusText = '• ระดับสีเขียว ปกติ';
     if (currentSugar >= 250) {
@@ -187,7 +208,6 @@ class _HomeScreenState extends State<HomeScreen> {
             Text('สวัสดีคุณ ${widget.userName}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             
-            
             Card(
               color: statusColor.withOpacity(0.1),
               shape: RoundedRectangleBorder(
@@ -200,30 +220,77 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Icon(Icons.bloodtype, color: statusColor, size: 48),
                     const SizedBox(width: 16),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('ระดับน้ำตาลล่าสุด', style: TextStyle(fontSize: 16, color: Colors.black54)),
-                        Text('${currentSugar.toStringAsFixed(0)} mg/dL', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: statusColor)),
-                        Text(statusText, style: TextStyle(fontSize: 14, color: statusColor, fontWeight: FontWeight.w500)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ระดับน้ำตาลวัน ($_selectedDay)', style: const TextStyle(fontSize: 16, color: Colors.black54)),
+                          Text('${currentSugar.toStringAsFixed(0)} mg/dL', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: statusColor)),
+                          Text(statusText, style: TextStyle(fontSize: 14, color: statusColor, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
+            const SizedBox(height: 20),
+
+            const Text('บันทึกระดับน้ำตาลประจำวัน', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                OutlinedButton(onPressed: () => _checkSugarLevel(110), child: const Text('จำลองค่าน้ำตาลปกติ (110)')),
-                ElevatedButton(
-                  onPressed: () => _checkSugarLevel(260), 
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade100),
-                  child: const Text('จำลองค่าพุ่งสูง (260)', style: TextStyle(color: Colors.red)),
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    DropdownButton<String>(
+                      value: _selectedDay,
+                      items: _daysOfWeek.map((String day) {
+                        return DropdownMenuItem<String>(
+                          value: day,
+                          child: Text(day, style: const TextStyle(fontSize: 16)),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedDay = newValue;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _sugarInputController,
+                        decoration: const InputDecoration(
+                          labelText: 'ค่าน้ำตาล (mg/dL)',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        double? enteredValue = double.tryParse(_sugarInputController.text);
+                        if (enteredValue != null) {
+                          _updateSugarLevel(currentDayIndex, enteredValue);
+                          _sugarInputController.clear();
+                          FocusScope.of(context).unfocus();
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                      ),
+                      child: const Text('บันทึก'),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -239,13 +306,15 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 24),
 
-            
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SummaryGraphScreen()));
+                  Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => SummaryGraphScreen(sugarRecords: widget.sugarRecords)),
+                  );
                 },
                 icon: const Icon(Icons.bar_chart_rounded),
                 label: const Text('ค่าน้ำตาลรอบ 7 วันล่าสุด / สรุปผล'),
@@ -262,7 +331,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
 
 class EmergencyAlertScreen extends StatelessWidget {
   const EmergencyAlertScreen({super.key});
@@ -299,9 +367,7 @@ class EmergencyAlertScreen extends StatelessWidget {
             ),
             const SizedBox(height: 40),
             ElevatedButton.icon(
-              onPressed: () {
-                
-              },
+              onPressed: () {},
               icon: const Icon(Icons.phone_in_talk, size: 28),
               label: const Text('โทรด่วนโรงพยาบาล (1669)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
@@ -323,13 +389,12 @@ class EmergencyAlertScreen extends StatelessWidget {
   }
 }
 
-
 class SummaryGraphScreen extends StatelessWidget {
-  const SummaryGraphScreen({super.key});
+  final List<double> sugarRecords;
+  const SummaryGraphScreen({super.key, required this.sugarRecords});
 
   @override
   Widget build(BuildContext context) {
-    final List<double> sugarRecords = [120, 145, 110, 95, 160, 255, 110];
     double sum = sugarRecords.reduce((a, b) => a + b);
     double average = sum / sugarRecords.length;
     double maxSugar = sugarRecords.reduce((a, b) => a > b ? a : b);
@@ -344,7 +409,6 @@ class SummaryGraphScreen extends StatelessWidget {
           children: [
             const Text('ค่าน้ำตาลรอบ 7 วันล่าสุด', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            
             
             Container(
               height: 220,
@@ -389,7 +453,9 @@ class SummaryGraphScreen extends StatelessWidget {
   }
 
   Widget _buildGraphBar(String day, double value) {
-    double heightRatio = (value / 300) * 140; // แปลงค่าเป็นความสูงพิกเซลสเกลจริง
+    double heightRatio = (value / 300) * 140; 
+    if (heightRatio > 140) heightRatio = 140; 
+    
     Color barColor = Colors.green;
     if (value >= 250) {
       barColor = Colors.red;
@@ -455,7 +521,6 @@ class ProfileScreen extends StatelessWidget {
             subtitle: const Text('ลงทะเบียนและประวัติบันทึกข้อมูลยาใหม่'),
             trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
             onTap: () {
-              
               Navigator.push(context, MaterialPageRoute(builder: (context) => const MedicationManagementScreen()));
             },
           ),
@@ -504,7 +569,6 @@ class MedicationManagementScreen extends StatelessWidget {
   }
 }
 
-
 class MedicationHistoryTab extends StatelessWidget {
   const MedicationHistoryTab({super.key});
 
@@ -531,7 +595,6 @@ class MedicationHistoryTab extends StatelessWidget {
     );
   }
 }
-
 
 class AddMedicationFormTab extends StatelessWidget {
   const AddMedicationFormTab({super.key});
