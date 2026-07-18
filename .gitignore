@@ -1,0 +1,35 @@
+# Flutter/Dart useful ignores
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android related
+**/android/**/GeneratedPluginRegistrant.java
+.gradle/
+captures/
+*.apk
+*.deb
+*.bundle
+
+# iOS/Mac related
+**/ios/Flutter/.flutter-plugins
+**/ios/Flutter/GeneratedPluginRegistrant.h
+**/ios/Flutter/GeneratedPluginRegistrant.m
+**/ios/Flutter/flutter_export_environment.sh
+Pods/
+.xcworkspace
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.iws
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
