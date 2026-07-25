@@ -82,7 +82,6 @@ class MedicationJSON //For Medication information
     notes: json['notes']
   );
 }
-
 class NotificationService
 {
   static final NotificationService _instance = NotificationService._internal();
