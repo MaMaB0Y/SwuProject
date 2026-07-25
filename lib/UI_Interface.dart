@@ -272,7 +272,6 @@ class _LoginScreen extends State<LoginScreen>{
   }
 }
 
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -358,6 +357,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  late Future<List<system.MedicationJSON>> _medHistory;
   int currentDayIndex = 0;
   double currentSugar = 0;
   final _sugarInputController = TextEditingController();
@@ -368,6 +368,7 @@ class _HomeScreenState extends State<HomeScreen> {
   {
     super.initState();
     _refreshsugar();
+    _medHistory = _readHistory();
   }
   Future<void> _updateSugarLevel(double value) async //Check and Update Sugar Level/Emergency
   {
@@ -387,7 +388,25 @@ class _HomeScreenState extends State<HomeScreen> {
     currentDayIndex = _daysOfWeek.indexOf(_selectedDay);
     currentSugar = double.tryParse(await widget.storage.read(key: currentDayIndex.toString()) ?? "0.0") ?? 0.0; //Read data and parse it to Double. two ?? in case data missing(not exist) or corruption
     if (!mounted) return;
-    setState(() {});
+    setState(() {
+      _medHistory = _readHistory();
+    });
+  }
+  Future<List<system.MedicationJSON>> _readHistory() async
+  {
+    try
+    {
+      String? rawJson = await widget.storage.read(key: "med_list");
+      if (rawJson == null) return [];
+      List<dynamic> decodedList = jsonDecode(rawJson);
+      return decodedList.map((item) => system.MedicationJSON.fromJson(item)).toList();
+    }
+    catch(e, stackTrace)
+    {
+      log.d('Crash inside _readMed(): $e');
+      log.d('StackTrace: $stackTrace');
+      rethrow;
+    }
   }
 
   @override
@@ -463,7 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onChanged: (String? newValue) async {
                         if (newValue != null) {
                             setState(() {
-                              _selectedDay = newValue;  
+                              _selectedDay = newValue;
                             });
                             await _refreshsugar();
                         }
@@ -506,16 +525,55 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const Text('รายการยาที่ต้องทานวันนี้', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.medication, color: Colors.blue),
-                title: const Text('Opzide 5mg / Metformin'),
-                subtitle: const Text('ค่าน้ำตาลล่าสุดสัมพันธ์กับการทานยา'),
-                trailing: Checkbox(value: false, onChanged: (val) {}),
-              ),
+            FutureBuilder<List<system.MedicationJSON>>( //List For today's medication
+              future: _medHistory,
+              builder: (context, snapshot)
+              {
+                if (snapshot.connectionState == ConnectionState.waiting)
+                {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError)
+                {
+                  log.i("***Snapshot Error***");
+                  log.d(snapshot.data);
+                  return Center(child: Text("Error Loading History: ${snapshot.error}"));
+                }
+                var meds = (snapshot.data ?? []).where((val) {
+                  var unpackeddate = val.date.split("/");
+                  DateTime date = DateTime(int.parse(unpackeddate[2]),int.parse(unpackeddate[1]),int.parse(unpackeddate[0]));
+                  return currentDayIndex == (date.weekday-1);
+                }).toList(); //Check each data, containing it in val, split and pack val into ISO (yyyy-mm-dd) and then return the choosing day and the List it.
+                if (meds.isEmpty)
+                {
+                  return const Center(
+                    child: Text("ไม่มียาที่ต้องทานในวันนี้", 
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey))
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16.0),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: meds.length,
+                  itemBuilder: (context, index)
+                  {
+                    final med = meds[index];
+                    return Card(
+                      child: ListTile(
+                        title: Text("${med.name} (${med.dosage}mg)", 
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text("วันที่ ${med.date} - ${med.time}\nหมายเหตุ: ${med.notes.isEmpty ? "-" : med.notes}"),
+                        isThreeLine: true,
+                        ),
+                    );
+                  }
+                );
+              }
             ),
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -524,7 +582,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   List<Future<String?>> readFutures = List.generate(_daysOfWeek.length, (i) => widget.storage.read(key:i.toString())); //Generate List using _daysOfWeek length and read through each one (kinda like list comprehension for loop)
                   List<String?> rawResults = await Future.wait(readFutures); //Wait for them all to finish
                   List<double> weeklySugarData = rawResults.map((val) => double.tryParse(val ?? "0.0") ?? 0.0).toList(); //Loop through rawResult using map and then List them.
+
                   if (!context.mounted) return;
+                  bool hasData = weeklySugarData.any((val) => val > 0);
+                  if (!hasData)
+                  {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("ยังไม่มีข้อมูลบันทึกน้ำตาลในสัปดาห์นี้"),
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 2)),
+                    );
+                    return;
+                  }
                   Navigator.push(
                     context, 
                     MaterialPageRoute(builder: (context) => SummaryGraphScreen(sugarRecords: weeklySugarData,)),
